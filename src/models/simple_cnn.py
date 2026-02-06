@@ -1,38 +1,56 @@
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, BatchNormalization
+"""
+Modèle CNN simple pour la classification de malaria.
+Architecture baseline avec 3 blocs convolutifs.
+"""
 
-class SimpleCNN:
+import torch.nn as nn
+from src.config import NOMBRE_CLASSES
+
+
+class SimpleCNN(nn.Module):
+    """Modèle CNN simple pour la classification binaire."""
     
-    def __init__(self, image_size=64):
-        self.image_size = image_size
-        self.model = self._build()
+    def __init__(self, taille_image=64):
+        super(SimpleCNN, self).__init__()
+        self.taille_image = taille_image
         
-    def _build(self):
-        model = Sequential([
-            Conv2D(32, (3, 3), activation='relu', input_shape=(self.image_size, self.image_size, 3)),
-            MaxPooling2D((2, 2)),
-            BatchNormalization(),
+      
+        self.couches_convolution = nn.Sequential(
+            # Bloc 1: 3 -> 32 canaux
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(32),
             
-            Conv2D(64, (3, 3), activation='relu'),
-            MaxPooling2D((2, 2)),
-            BatchNormalization(),
+            # Bloc 2: 32 -> 64 canaux
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(64),
             
-            Conv2D(128, (3, 3), activation='relu'),
-            MaxPooling2D((2, 2)),
-            BatchNormalization(),
-            
-            Flatten(),
-            Dense(256, activation='relu'),
-            Dropout(0.5),
-            Dense(128, activation='relu'),
-            Dropout(0.3),
-            Dense(2, activation='softmax')
-        ])
-        
-        model.compile(
-            optimizer='adam',
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
+            # Bloc 3: 64 -> 128 canaux
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(128),
         )
         
-        return model
+        # Calcul de la taille après convolutions
+        taille_apres_conv = taille_image // 8  # 3 MaxPool de 2x2
+        
+        # Couches de classification
+        self.couches_classification = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * taille_apres_conv * taille_apres_conv, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, NOMBRE_CLASSES)
+        )
+    
+    def forward(self, tenseur_entree):
+        caracteristiques = self.couches_convolution(tenseur_entree)
+        sortie = self.couches_classification(caracteristiques)
+        return sortie

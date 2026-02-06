@@ -1,26 +1,43 @@
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Flatten, Dropout
+"""
+Modèle VGG16 pré-entraîné pour la classification de malaria.
+Utilise le transfer learning avec fine-tuning.
+"""
 
-class VGG16Model:
+import torch.nn as nn
+from torchvision import models
+from src.config import NOMBRE_CLASSES
+
+
+class VGG16Model(nn.Module):
+    """Modèle VGG16 avec transfer learning."""
     
-    def __init__(self, image_size=64):
-        self.image_size = image_size
-        self.model = self._build()
+    def __init__(self, taille_image=64):
+        super(VGG16Model, self).__init__()
+        self.taille_image = taille_image
+        
+        # Chargement du modèle pré-entraîné
+        modele_vgg = models.vgg16(weights='DEFAULT')
+        
+        # Gel des premières couches
+        for couche in modele_vgg.features[:-6]:
+            for parametre in couche.parameters():
+                parametre.requires_grad = False
+        
+        self.extracteur_caracteristiques = modele_vgg.features
+        
+     
+        taille_sortie = taille_image // 32 
+        
+        
+        self.couches_classification = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(512 * taille_sortie * taille_sortie, 256),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(256, NOMBRE_CLASSES)
+        )
     
-    def _build(self):
-        base = VGG16(weights='imagenet', include_top=False, 
-                     input_shape=(self.image_size, self.image_size, 3))
-        
-        for layer in base.layers[:-4]:
-            layer.trainable = False
-        
-        x = Flatten()(base.output)
-        x = Dense(256, activation='relu')(x)
-        x = Dropout(0.5)(x)
-        x = Dense(2, activation='softmax')(x)
-        
-        model = Model(inputs=base.input, outputs=x)
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        
-        return model
+    def forward(self, tenseur_entree):
+        caracteristiques = self.extracteur_caracteristiques(tenseur_entree)
+        sortie = self.couches_classification(caracteristiques)
+        return sortie
